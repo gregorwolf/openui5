@@ -16,9 +16,11 @@ sap.ui.define([
 	'sap/ui/model/FilterProcessor',
 	'sap/ui/core/format/DateFormat',
 	"sap/base/Log",
-	"sap/base/assert"
+	"sap/base/assert",
+	"sap/ui/thirdparty/jquery",
+	"sap/base/security/encodeURL"
 ],
-	function(Sorter, FilterProcessor, DateFormat, Log, assert) {
+	function(Sorter, FilterProcessor, DateFormat, Log, assert, jquery, encodeURL ) {
 	"use strict";
 
 	var rDecimal = /^([-+]?)0*(\d+)(\.\d+|)$/,
@@ -382,11 +384,11 @@ sap.ui.define([
 		}
 
 		if (oValue1) {
-			oValue1 = jQuery.sap.encodeURL(String(oValue1));
+			oValue1 = encodeURL(String(oValue1));
 		}
 		if (oValue2) {
-			oValue2 = jQuery.sap.encodeURL(String(oValue2));
-	}
+			oValue2 = encodeURL(String(oValue2));
+		}
 
 		if (!bCaseSensitive && sType === "Edm.String") {
 			sPath =  "toupper(" + sPath + ")";
@@ -403,12 +405,20 @@ sap.ui.define([
 				return sPath + "%20" + sOperator.toLowerCase() + "%20" + oValue1;
 			case "BT":
 				return "(" + sPath + "%20ge%20" + oValue1 + "%20and%20" + sPath + "%20le%20" + oValue2 + ")";
+			case "NB":
+				return "not%20(" + sPath + "%20ge%20" + oValue1 + "%20and%20" + sPath + "%20le%20" + oValue2 + ")";
 			case "Contains":
 				return "substringof(" + oValue1 + "," + sPath + ")";
+			case "NotContains":
+				return "not%20substringof(" + oValue1 + "," + sPath + ")";
 			case "StartsWith":
 				return "startswith(" + sPath + "," + oValue1 + ")";
+			case "NotStartsWith":
+				return "not%20startswith(" + sPath + "," + oValue1 + ")";
 			case "EndsWith":
 				return "endswith(" + sPath + "," + oValue1 + ")";
+			case "NotEndsWith":
+				return "not%20endswith(" + sPath + "," + oValue1 + ")";
 			default:
 				jQuery.sap.log.error("ODataUtils :: Unknown filter operator " + sOperator);
 				return "true";

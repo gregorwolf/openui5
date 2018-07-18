@@ -83,6 +83,9 @@ function(
 	* <li> When you want the user to select from a predefined set of options. Use {@link sap.m.MultiComboBox} instead.</li>
 	* </ul>
 	* <h3>Responsive Behavior</h3>
+	* If there are many tokens, the control shows only the last selected tokens that fit and for the others a label <i>N-more</i> is provided.
+	* In case the length of the last selected token is exceeding the width of the control, only a label <i>N-Items</i> is shown.
+	* In both cases, pressing on the label will show the tokens in a popup.
 	* <u>On Phones:</u>
 	* <ul>
 	* <li> Only the last entered token is displayed.</li>
@@ -93,14 +96,12 @@ function(
 	* <ul>
 	* <li> The auto-complete suggestions appear below or above the multi-input field.</li>
 	* <li> You can review the tokens by swiping them to the left or right.</li>
-	* <li> (Multi-line Mode) Previously added tokens are visible above the input field.</li>
 	* </ul>
 	* <u>On Desktop:</u>
 	* <ul>
 	* <li> The auto-complete suggestions appear below or above the multi-input field.</li>
 	* <li> You can review the tokens by pressing the right or left arrows on the keyboard.</li>
-	* <li> You can select single tokens or a range of tokens and you can copy/cut/delete them.</
-	* <li> (Multi-line Mode) Previously added tokens are visible above the input field.</li>
+	* <li> You can select single tokens or a range of tokens and you can copy/cut/delete them.</li>
 	* </ul>
 	* @extends sap.m.Input
 	*
@@ -126,7 +127,7 @@ function(
 				 * The default value is false.
 				 * <b>Note:</b> This property does not take effect on smartphones or when the editable property is set to false.
 				 * <b>Caution:</b> Do not enable multi-line mode in tables and forms.
-				 * @deprecated Since version 1.58.
+				 * @deprecated Since version 1.58. Replaced with N-more/N-items labels, which work in all cases.
 				 * @since 1.28
 				 */
 				enableMultiLineMode: {type: "boolean", group: "Behavior", defaultValue: false},
@@ -254,6 +255,7 @@ function(
 			this._bValueHelpOpen = true;
 		}, this);
 
+		this._getValueHelpIcon().setProperty("visible", true, true);
 		this._modifySuggestionPicker();
 	};
 
@@ -339,11 +341,6 @@ function(
 		this.fireTokenChange(args.getParameters());
 		this.invalidate();
 
-		if (this._bUseDialog && this._tokenizer.getParent() instanceof sap.m.Dialog) {
-			this._tokenizer.setVisible(true);
-			return;
-		}
-
 		// check if active element is part of MultiInput
 		var bFocusOnMultiInput = containsOrEquals(this.getDomRef(), document.activeElement);
 		if (args.getParameter("type") === "tokensChanged" && args.getParameter("removedTokens").length > 0 && bFocusOnMultiInput) {
@@ -416,10 +413,6 @@ function(
 				this.setValue("");
 			}
 
-			if (this._tokenizer.getVisible() === false) {
-				this._tokenizer.setVisible(true);
-			}
-
 			if (this._oList instanceof sap.m.Table) {
 				// CSN# 1421140/2014: hide the table for empty/initial results to not show the table columns
 				this._oList.addStyleClass("sapMInputSuggestionTableHidden");
@@ -469,7 +462,7 @@ function(
 		if (this.getDomRef()) {
 			var iWidth = this.getDomRef().offsetWidth,
 				iValueHelpButtonWidth = this.getDomRef("vhi") ? parseInt(this.getDomRef("vhi").offsetWidth, 10) : 0,
-				iInputWidth = parseInt(this.$().find(".sapMMultiInputInputContainer").css("min-width"), 10) || 0;
+				iInputWidth = parseInt(this.$().find(".sapMInputBaseInner").css("min-width"), 10) || 0;
 
 			return iWidth - (iValueHelpButtonWidth + iInputWidth) + "px";
 		} else {
@@ -488,11 +481,11 @@ function(
 	MultiInput.prototype.setEnableMultiLineMode = function (bMultiLineMode) {
 		// the multiline functionality is deprecated
 		// the method is left for backwards compatibility
-		return this;
+		return this.setProperty("enableMultiLineMode", bMultiLineMode, true);
 	};
 
 	MultiInput.prototype.onmousedown = function (e) {
-		if (e.target == this.getDomRef('border')) {
+		if (e.target == this.getDomRef('content')) {
 			e.preventDefault();
 			e.stopPropagation();
 		}
@@ -549,6 +542,7 @@ function(
 		}
 
 		Input.prototype.onBeforeRendering.apply(this, arguments);
+
 		this._deregisterResizeHandler();
 	};
 	/**
@@ -804,9 +798,6 @@ function(
 							that._oPopupInput.setValue("");
 						}
 
-						if (that._tokenizer.getVisible() === false) {
-							that._tokenizer.setVisible(true);
-						}
 						that._setAllTokenVisible();
 					}
 
@@ -1304,7 +1295,7 @@ function(
 	 * @returns {domRef} The domref at which to open the suggestion menu
 	 */
 	MultiInput.prototype.getPopupAnchorDomRef = function () {
-		return this.getDomRef("border");
+		return this.getDomRef("content");
 	};
 
 	/**
@@ -1641,6 +1632,7 @@ function(
 		});
 		oListItem.data("key", oToken.getKey());
 		oListItem.data("text", oToken.getText());
+		oListItem.data("tokenId", oToken.getId());
 		return oListItem;
 	};
 
@@ -1721,12 +1713,13 @@ function(
 				text: oItemData.data("text"),
 				key: oItemData.data("key")
 			});
+			oItemData.data("tokenId", oToken.getId());
 			this.addToken(oToken);
 		} else {
-			var aTokens = this.getTokens(),
-				sSelectedKey = oItemData.data("key");
-			aTokens.some(function(oToken){
-				if (oToken.getKey() === sSelectedKey) {
+			var sSelectedId = oItemData.data("tokenId");
+
+			this.getTokens().some(function(oToken){
+				if (oToken.getId() === sSelectedId) {
 					this._tokenizer.removeToken(oToken);
 					return true;
 				}

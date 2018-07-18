@@ -19,7 +19,7 @@ sap.ui.require([
 	'sap/ui/fl/Utils',
 	'sap/ui/rta/Utils',
 	"sap/ui/rta/appVariant/AppVariantUtils",
-	'sap/ui/fl/FakeLrepLocalStorage',
+	'sap/ui/fl/FakeLrepSessionStorage',
 	'sap/ui/rta/RuntimeAuthoring',
 	'sap/ui/rta/command/Stack',
 	'sap/ui/rta/command/CommandFactory',
@@ -31,7 +31,6 @@ sap.ui.require([
 	'sap/ui/rta/appVariant/Feature',
 	'sap/base/Log',
 	"sap/base/util/UriParameters",
-	// should be last
 	'sap/ui/thirdparty/sinon-4'
 ],
 function(
@@ -50,7 +49,7 @@ function(
 	Utils,
 	RtaUtils,
 	AppVariantUtils,
-	FakeLrepLocalStorage,
+	FakeLrepSessionStorage,
 	RuntimeAuthoring,
 	Stack,
 	CommandFactory,
@@ -83,7 +82,7 @@ function(
 
 	QUnit.module("Given that RuntimeAuthoring is available with a view as rootControl...", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 
 			this.oRta = new RuntimeAuthoring({
 				rootControl : oComp.getAggregation("rootControl")
@@ -94,7 +93,7 @@ function(
 		},
 		afterEach : function(assert) {
 			this.oRta.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			sandbox.restore();
 		}
 	}, function() {
@@ -189,7 +188,7 @@ function(
 
 	QUnit.module("Given a USER layer change", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 
 			this.oUserChange = new Change({
 				"fileType": "change",
@@ -214,21 +213,31 @@ function(
 		},
 		afterEach : function(assert) {
 			this.oRta.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			sandbox.restore();
 		}
 	}, function() {
-		QUnit.test("when RTA is started in the user layer", function(assert) {
+		QUnit.test("when RTA is started and stopped in the user layer", function(assert) {
+			var done = assert.async();
 			var oFlexController = this.oRta._getFlexController();
 			sandbox.stub(oFlexController, "getComponentChanges").returns(Promise.resolve([this.oUserChange]));
 			this.oRta.setFlexSettings({layer: "USER"});
+			var oReloadSpy = sandbox.spy(this.oRta, "_handleReloadOnExit");
 
-			return this.oRta.start()
+			this.oRta.attachStop(function() {
+				assert.ok(oReloadSpy.notCalled, "the reload check was skipped");
+				done();
+			});
+
+			this.oRta.start()
 			.then(function() {
 				assert.equal(this.oRta.getToolbar().getControl('restore').getVisible(), true, "then the Restore Button is visible");
 				assert.equal(this.oRta.getToolbar().getControl('restore').getEnabled(), true, "then the Restore Button is enabled");
 				assert.equal(this.oRta.getToolbar().getControl('exit').getVisible(), true, "then the Exit Button is visible");
 				assert.equal(this.oRta.getToolbar().getControl('exit').getEnabled(), true, "then the Exit Button is enabled");
+			}.bind(this))
+			.then(function() {
+				this.oRta.getToolbar().getControl("exit").firePress();
 			}.bind(this));
 		});
 
@@ -288,7 +297,7 @@ function(
 
 	QUnit.module("Given that RuntimeAuthoring is started without toolbar...", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 
 			this.oRta = new RuntimeAuthoring({
 				rootControl : oComp.getAggregation("rootControl"),
@@ -299,7 +308,7 @@ function(
 		},
 		afterEach : function(assert) {
 			this.oRta.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			sandbox.restore();
 		}
 	}, function() {
@@ -431,8 +440,8 @@ function(
 		beforeEach : function(assert) {
 			var done = assert.async();
 
-			FakeLrepLocalStorage.deleteChanges();
-			assert.equal(FakeLrepLocalStorage.getNumChanges(), 0, "Local storage based LREP is empty");
+			FakeLrepSessionStorage.deleteChanges();
+			assert.equal(FakeLrepSessionStorage.getNumChanges(), 0, "Local storage based LREP is empty");
 			sandbox.stub(Utils, "getAppComponentForControl").returns(oComp);
 
 			var oChangeRegistry = ChangeRegistry.getInstance();
@@ -497,7 +506,7 @@ function(
 			this.oRemoveCommand1.destroy();
 			this.oCommandStack.destroy();
 			this.oRta.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 		}
 	}, function() {
 		QUnit.test("when cut is triggered by keydown-event on rootElementOverlay, with macintosh device and metaKey is pushed", function(assert) {
@@ -616,8 +625,8 @@ function(
 
 	QUnit.module("Given that RuntimeAuthoring is available together with a CommandStack with changes...", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
-			assert.equal(FakeLrepLocalStorage.getNumChanges(), 0, "Local storage based LREP is empty");
+			FakeLrepSessionStorage.deleteChanges();
+			assert.equal(FakeLrepSessionStorage.getNumChanges(), 0, "Local storage based LREP is empty");
 			sandbox.stub(Utils, "getAppComponentForControl").returns(oComp);
 
 			// Create the controls
@@ -672,7 +681,7 @@ function(
 			this.oGroupElementDesignTimeMetadata.destroy();
 			this.oRta.destroy();
 			this.oCommandStack.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			sandbox.restore();
 		}
 	}, function() {
@@ -694,7 +703,7 @@ function(
 			var done = assert.async();
 			return this.oRta.stop(true).then(function() {
 				assert.ok(true, "then the promise got resolved");
-				assert.equal(FakeLrepLocalStorage.getNumChanges(), 0, "there is no change written to LREP");
+				assert.equal(FakeLrepSessionStorage.getNumChanges(), 0, "there is no change written to LREP");
 				assert.equal(this.oCommandStack.getAllExecutedCommands().length, 2, "2 commands are still in the stack");
 				done();
 			}.bind(this));
@@ -710,7 +719,7 @@ function(
 
 	QUnit.module("Given that RuntimeAuthoring is started with different plugin sets...", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			var oCommandFactory = new CommandFactory();
 
 			this.oContextMenuPlugin = new ContextMenuPlugin("nonDefaultContextMenu");
@@ -734,7 +743,7 @@ function(
 		},
 		afterEach : function(assert) {
 			this.oContextMenuPlugin.destroy();
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 			this.oRemovePlugin.destroy();
 			this.oRta.destroy();
 			sandbox.restore();
@@ -755,7 +764,7 @@ function(
 
 	QUnit.module("Given that RuntimeAuthoring is started with a scope set...", {
 		beforeEach : function(assert) {
-			FakeLrepLocalStorage.deleteChanges();
+			FakeLrepSessionStorage.deleteChanges();
 
 			this.oRta = new RuntimeAuthoring({
 				rootControl : oComp.getAggregation("rootControl"),
